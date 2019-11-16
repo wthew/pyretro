@@ -9,9 +9,9 @@ pygame.display.set_caption('Space')
 
 # Variaveis importantes
 
-# windows 60 - 3 / linux 60 6
+
 FPS = 60 # taxa de atualizacao
-SPEED = FPS/12 # velocidade dos movimentos em 'pixel por FPS' sendo o recomendavel 12
+SPEED = 4 # velocidade dos movimentos em 'pixel por FPS' sendo o recomendavel 12
 BG = pygame.image.load(path.join(PATH_TO_ASSETS,'backgrounds','space.png'))
 FONT_COLOR = (225, 225 ,255)
 
