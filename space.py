@@ -28,29 +28,34 @@ NEXT_STAGE = pygame.event.Event(USEREVENT + 3)
 pygame.time.set_timer(BOT_SHOOT.type, 512)
 
 # load images
-heart_image = load_image('space', "heart.png", 4)
-heart_broken_image = load_image('space', "heart_broken.png", 4)
-heart_width, heart_height = heart_image.get_size()
+img_heart = load_image('space', "heart.png", 4)
+img_heart_broken = load_image('space', "heart_broken.png", 4)
+heart_width, heart_height = img_heart.get_size()
 
 
 # Classes
 class Player(pygame.sprite.Sprite):
     def __init__(self):
-        # posição inicial
-        self.x, self.y = screen_size[0]/2,  int(screen_size[1] * .8)
-
-        self.image = load_image('space', 'space_player.png', 3)
-
+        self.image = load_image('space', 'player_idle.png', 3)
         self.width, self.height = self.image.get_size()
-        self.rect = Rect(self.x, self.y, self.width, self.height)
 
+        # estado inicial
         self.alive, self.shooting, self.direction = True, False, 'none'
-        self.hp = 15
+
+        # posição inicial
+        self.x, self.y = int(screen_size[0] * .5 - self.width * .5),  int(screen_size[1] * .8)
+
+        self.rect = Rect(self.x, self.y, self.width, self.height)
         self.battery = Battery()
 
-        self.hearts = [
-            Rect(i, int(screen_size[1] - heart_height * 2), heart_width, heart_height) for i in range( int(screen_size[0] * .05), int(self.hp * (heart_width * 1.55) ), int(heart_width * 1.5))
-        ]
+        # posicionar os coracoes no lugar certo
+        self.hp = 15
+        self.hearts = []
+        y = int(screen_size[1] - heart_height * 2)
+
+        for i in range(self.hp):
+            x = (screen_size[0]/2 - ((heart_width*1.5) *self.hp)/2) + (heart_width * 1.5) * i
+            self.hearts.append(Rect(x,y,heart_width, heart_height))
 
     def move(self, direction):
         self.direction = direction
@@ -64,54 +69,58 @@ class Player(pygame.sprite.Sprite):
         if self.alive and self.hp <= 0:
             self.alive = False
 
-        if self.x >= screen_size[0] - self.width * 1.5:
-            self.x -= 5
+        if self.x >= screen_size[0] - self.width * 2:
+            self.x -= SPEED
 
-        if self.x <= self.width * 1.5:
-            self.x += 5
+        if self.x <= self.width:
+            self.x += SPEED
 
         if self.direction == 'left':
             self.x -= SPEED
 
+
         if self.direction == 'right':
             self.x += SPEED
+
+
+        if self.direction == 'none':
+            pass
 
         self.rect = Rect(self.x, self.y, self.width, self.height)
 
 
     def draw(self, surf):
-
-        surf.blit(self.image, self.rect)
-        # self.bar.draw(surf)
         self.battery.draw(surf)
 
+        surf.blit(self.image, self.rect)
+
         for i_heart in range(len(self.hearts)):
-            surf.blit( (heart_image if self.hp > i_heart else heart_broken_image), self.hearts[i_heart])
+            surf.blit( (img_heart if self.hp > i_heart else img_heart_broken), self.hearts[i_heart])
 
-
-    def shoot(self, list):
+    def shoot(self):
         if not self.battery.blocked:
-            # self.battery.charge -= 3
-            list.append(Bullet(self))
+            self.battery.charge -= 4
+            bullets.append(Bullet(self))
 
 class Battery:
     def __init__(self):
         self.sprites = {}
-
-        self.charge = 0
 
         for i in glob.glob(path.join(PATH_TO_ASSETS, 'space', 'battery?.png')):
             self.sprites[path.basename(i)] = pygame.image.load(i)
 
         self.img = self.sprites['battery0.png']
         self.height, self.width = self.img.get_size()
+        self.charge = 0
+        self.blocked = True
+        self.x, self.y = int(screen_size[0] * .9), int(screen_size[1] * .9)
 
-        self.rect = Rect(screen_size[0]*.9, screen_size[1] * .9, self.width, self.height)
+        self.rect = Rect(self.x, self.y, self.width, self.height)
 
     def update(self):
         if self.charge <= 25: self.charge += .2
 
-        if self.charge >= 24:
+        if self.charge > 24:
             self.img = self.sprites[f'battery{3}.png']
             self.blocked = False
 
@@ -121,7 +130,7 @@ class Battery:
         elif self.charge > 8:
             self.img = self.sprites[f'battery{1}.png']
 
-        elif self.charge > 4:
+        elif self.charge > 0:
             self.img = self.sprites[f'battery{0}.png']
 
         else:
@@ -159,7 +168,7 @@ class Enemy():
     def __init__(self, x, y):
         self.init_x, self.init_y = x, y
         self.x, self.y = x, y
-        self.image = self.image = load_image('space', 'SPACE_Enemy.png', 4)
+        self.image = self.image = load_image('space', 'enemy.png', 4)
         self.width, self.height = self.image.get_size()
         self.rect = Rect(self.x - self.width // 2, self.y, self.width + self.width // 2, self.height)
         self.alive = True
@@ -194,15 +203,6 @@ class Enemy():
     def draw(self, surf):
     	screen.blit(self.image, self.rect)
 
-    def cd(self):
-        if self.direction is 'right':
-            self.direction = 'left'
-
-        else:
-            self.direction = 'right'
-
-        self.acc = 1
-
 
 class Boss(Enemy):
     def __init__(self):
@@ -228,12 +228,12 @@ class Boss(Enemy):
 
 
 class Platform():
-    def __init__(self, x, y):
-        self.x, self.y = x, y
-        self.width, self.height = 100, 10
+    def __init__(self, x):
+        self.x, self.y = x, screen_size[1] * 0.75
+        self.width, self.height = 100, 20
         self.color = FONT_COLOR # Definindo a cor como 'Quase Branco'
         self.rect = Rect(self.x, self.y, self.width, self.height)
-        self.hp = 5000 # tem que ser dificil quebrar a parede
+        self.hp = 1000 # tem que ser dificil quebrar a parede
         self.alive = True
 
     def update(self):
@@ -271,7 +271,7 @@ class Space():
 
         # Definindo posicoes das plataformas, com o maximo (recomendavel) sendo 5
         for i in range(self.numb_platforms):
-            self.platforms.append(Platform(espaco * (i+1) + (i*100), screen_size[1] * 0.75))
+            self.platforms.append(Platform(espaco * (i+1) + (i*100)))
 
 
     def update(self):
@@ -423,7 +423,7 @@ class Game():
 
             if self.on_space:
                 if event.type == KEYDOWN and (event.key == K_a or event.key == K_SPACE):
-                     self.space.player.shoot(bullets)
+                     self.space.player.shoot()
                 if event.type == KEYDOWN and (event.key == K_a or event.key == K_LEFT):
                      self.space.player.move('left')
                 if event.type == KEYDOWN and (event.key == K_d or event.key == K_RIGHT):
@@ -438,8 +438,7 @@ class Game():
                     self.let_a = pygame.time.get_ticks()
 
                 if event.type == BOT_SHOOT.type:
-                    try: self.space.shoot(random.choice(self.space.enemys), enemy=True)
-                    except: pass
+                    self.space.shoot(random.choice(self.space.enemys), enemy=True)
 
                 if event.type == BOT_DIE.type:
                     sfx['dead_enemy.wav'].play()
