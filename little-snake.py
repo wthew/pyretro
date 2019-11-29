@@ -55,7 +55,7 @@ class World():
         self.pristine = True
         self.score = 0
         self.bg_color = bgLight
-        self.conter = Button(90, 45, 375, 10, flat = True)
+        self.conter = Button(250, 45, 375, 10, flat = True)
         self.dificuldade = 'Facil' if True else 'Dificil'
         self.fps = 10 if self.dificuldade == 'Facil' else 20
 

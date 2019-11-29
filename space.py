@@ -11,7 +11,7 @@ pygame.display.set_caption('Space')
 
 
 FPS = 60 # taxa de atualizacao
-SPEED = 4 # velocidade dos movimentos em 'pixel por FPS' sendo o recomendavel 12
+SPEED = 8 # velocidade dos movimentos em 'pixel por FPS' sendo o recomendavel 12
 BG = pygame.image.load(path.join(PATH_TO_ASSETS,'backgrounds','space.png'))
 FONT_COLOR = (225, 225 ,255)
 
@@ -36,6 +36,7 @@ heart_width, heart_height = img_heart.get_size()
 # Classes
 class Player(pygame.sprite.Sprite):
     def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
         self.image = load_image('space', 'player_idle.png', 3)
         self.width, self.height = self.image.get_size()
 
@@ -60,9 +61,6 @@ class Player(pygame.sprite.Sprite):
     def move(self, direction):
         self.direction = direction
 
-    def goto(self, x):
-        self.x = x - self.width // 2
-
     def update(self):
         self.battery.update()
 
@@ -82,12 +80,18 @@ class Player(pygame.sprite.Sprite):
         if self.direction == 'right':
             self.x += SPEED
 
-
-        if self.direction == 'none':
-            pass
-
         self.rect = Rect(self.x, self.y, self.width, self.height)
 
+    def shake(self):
+        self.rect[0] -= SPEED
+        self.draw(screen)
+        self.rect[1] -= (SPEED * 2)
+        self.draw(screen)
+        self.rect[0] += SPEED
+        self.draw(screen)
+        self.rect[1] += (SPEED * 3)
+        self.draw(screen)
+        self.rect[1] -= SPEED
 
     def draw(self, surf):
         self.battery.draw(surf)
@@ -98,9 +102,10 @@ class Player(pygame.sprite.Sprite):
             surf.blit( (img_heart if self.hp > i_heart else img_heart_broken), self.hearts[i_heart])
 
     def shoot(self):
+        self.shake()
         if not self.battery.blocked:
             self.battery.charge -= 4
-            bullets.append(Bullet(self))
+            bullets_player_group.add(Bullet(self))
 
 class Battery:
     def __init__(self):
@@ -140,17 +145,22 @@ class Battery:
     def draw(self, surf):
         surf.blit(pygame.transform.scale(self.img, (self.height * 4, self.width * 4)), self.rect)
 
-class Bullet(Rect):
+class Bullet(pygame.sprite.Sprite):
     def __init__(self, src, enemy=False):
+        pygame.sprite.Sprite.__init__(self)
         sfx['bullet.wav'].play()
-        self.x = src.x + src.width // 2 - 5 // 2
-        self.y = src.y + src.height // 2 - 5 // 2
-        self.color = FONT_COLOR
+        self.x = src.x + src.width // 2 - 30 // 2
+        self.y = src.y + src.height // 2 - 60 // 2
         self.direction = 'down' if enemy else 'up'
         self.alive = True
-        self.rect = Rect(self.x, self.y, 5, 10)
+        self.image = pygame.image.load(path.join(PATH_TO_ASSETS, 'space', 'bullet.png')).convert_alpha()
+        self.image = pygame.transform.scale(self.image, (30, 60))
+        self.rect = Rect(self.x, self.y, 30, 60)
         self.damage = 50
         self.acc = 1
+        if enemy:
+            self.image = pygame.transform.flip(self.image, False, True)
+
 
     def update(self):
         if self.alive:
@@ -161,11 +171,10 @@ class Bullet(Rect):
             if self.y <= - 0 or self.y >= screen_size[1]:
                 self.alive = False
 
-    def draw(self, surf):
-        pygame.draw.rect(surf, self.color, self.rect)
 
-class Enemy():
+class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
         self.init_x, self.init_y = x, y
         self.x, self.y = x, y
         self.image = self.image = load_image('space', 'enemy.png', 4)
@@ -202,6 +211,9 @@ class Enemy():
 
     def draw(self, surf):
     	screen.blit(self.image, self.rect)
+
+    def shoot(self):
+        bullets_enemy_group.add(Bullet(self, enemy=True))
 
 
 class Boss(Enemy):
@@ -262,7 +274,6 @@ class Space():
         self.bg_color = (0, 0, 0)
         self.score = 0
         self.counter = c
-        self.player = Player()
         self.platforms = list()
         self.numb_platforms = 5
 
@@ -276,75 +287,82 @@ class Space():
 
     def update(self):
         screen.fill(self.bg_color)
-        self.player.update()
+        player_group.update()
+        enemy_group.update()
+        bullets_enemy_group.update()
+        bullets_player_group.update()
 
-        for bullet in bullets:
-            bullet.update() if bullet.alive else bullets.remove(bullet)
 
-            for platform in self.platforms:
-                platform.update() if platform.alive else self.platforms.remove(platform)
-                if bullet.rect.colliderect(platform):
-                    platform.hp -= bullet.damage
-                    bullets.remove(bullet)
+        if pygame.sprite.groupcollide(player_group, bullets_enemy_group, False, True, None):
+            player.hp -= 1
+            sfx['damage.wav'].play()
 
-            for enemy in self.enemys:
-                if bullet.rect.colliderect(enemy.rect) and bullet.direction == 'up':
-                    enemy.hp -= bullet.damage
-                    bullets.remove(bullet)
+        print(pygame.sprite.groupcollide(player_group, bullets_player_group, False, True, None))
 
-            if bullet.rect.colliderect(self.player.rect) and bullet.direction == 'down':
-                bullets.remove(bullet)
-                self.player.hp -= 1
-                sfx['damage.wav'].play()
 
-        if len(bullets) > 100: bullets.remove(bullets[0])
+        # for bullet in bullets:
+        #     bullet.update() if bullet.alive else bullets.remove(bullet)
+        #
+        #     for platform in self.platforms:
+        #         platform.update() if platform.alive else self.platforms.remove(platform)
+        #         if bullet.rect.colliderect(platform):
+        #             platform.hp -= bullet.damage
+        #             bullets.remove(bullet)
+        #
+        #     for enemy in self.enemys:
+        #         if bullet.rect.colliderect(enemy.rect) and bullet.direction == 'up':
+        #             enemy.hp -= bullet.damage
+        #             bullets.remove(bullet)
+        #
+        #     if bullet.rect.colliderect(player.rect) and bullet.direction == 'down':
+        #         bullets.remove(bullet)
+        #         player.hp -= 1
+        #         sfx['damage.wav'].play()
 
-        if not self.player.alive:
-            self.stage()
-            self.player.__init__()
-            self.score = 0
-            return False
+        # if len(bullets) > 100: bullets.remove(bullets[0])
 
-        if len(self.enemys) == 0:
-            self.counter += 1
-            pygame.event.post(NEXT_STAGE)
-            self.player.x, self.player.direction = screen_size[0] * .5, 'none'
-
-            if self.counter in [i for i in range(0, 50, 5)] or self.counter >= 50:
-                self.stage(boss=True)
-            else:
-                self.stage()
-
-        [enemy.update() if enemy.alive else self.enemys.remove(enemy) for enemy in self.enemys]
-        return True
+        # if not player.alive:
+        #     self.stage()
+        #     player.__init__()
+        #     self.score = 0
+        #     return False
+        #
+        # if len(self.enemys) == 0:
+        #     self.counter += 1
+        #     pygame.event.post(NEXT_STAGE)
+        #     player.x, player.direction = screen_size[0] * .5, 'none'
+        #
+        #     if self.counter in [i for i in range(0, 50, 5)] or self.counter >= 50:
+        #         self.stage(boss=True)
+        #     else:
+        #         self.stage()
+        #
+        # [enemy.update() if enemy.alive else self.enemys.remove(enemy) for enemy in self.enemys]
+        # return True
 
     def stage(self, boss=False):
-        self.enemys = []
-        self.bullets = bullets
 
-        if boss: self.enemys.append(Boss())
+        if boss:
+            self.enemys.append(Boss())
 
         else:
             enemy_model = Enemy(screen_size[0], screen_size[1])
 
             for y in range((enemy_model.height * 2), (screen_size[1] // 2), (enemy_model.height * 2)):
                 for x in range((enemy_model.width * 4), (screen_size[0] - enemy_model.width * 4), (enemy_model.width * 2)):
-                    self.enemys.append(Enemy(x, y))
+                    enemy_group.add(Enemy(x, y))
 
             del(enemy_model)
-
-    def shoot(self, who, enemy=False):
-        bullets.append(Bullet(who, enemy=enemy))
 
 
     def draw(self, surf):
         draw_text(screen, 'SCORE:', int(screen_size[0] * 0.80), 10, size=25, color=(225,225,255))
         draw_text(screen, str(self.score), int(screen_size[0] * 0.95), 10, size=25)
-        [bullet.draw(surf) for bullet in bullets]
+        bullets_enemy_group.draw(surf)
+        bullets_player_group.draw(surf)
         [platform.draw(surf) for platform in self.platforms]
-        [enemy.draw(surf) for enemy in self.enemys]
-        self.player.draw(surf)
-        if len(self.enemys) == 0: surf.fi
+        enemy_group.draw(surf)
+        player.draw(surf)
 
 
 class Game():
@@ -423,14 +441,14 @@ class Game():
 
             if self.on_space:
                 if event.type == KEYDOWN and (event.key == K_a or event.key == K_SPACE):
-                     self.space.player.shoot()
+                     player.shoot()
                 if event.type == KEYDOWN and (event.key == K_a or event.key == K_LEFT):
-                     self.space.player.move('left')
+                     player.move('left')
                 if event.type == KEYDOWN and (event.key == K_d or event.key == K_RIGHT):
-                     self.space.player.move('right')
+                     player.move('right')
                 if event.type == KEYUP:
                     if (event.key == K_a or event.key == K_d) or (event.key == K_LEFT or event.key == K_RIGHT):
-                         self.space.player.direction = 'none'
+                         player.direction = 'none'
 
                 if event.type == NEXT_STAGE.type:
                     self.on_space = False
@@ -438,7 +456,7 @@ class Game():
                     self.let_a = pygame.time.get_ticks()
 
                 if event.type == BOT_SHOOT.type:
-                    self.space.shoot(random.choice(self.space.enemys), enemy=True)
+                    random.choice(enemy_group.sprites()).shoot()
 
                 if event.type == BOT_DIE.type:
                     sfx['dead_enemy.wav'].play()
@@ -457,8 +475,19 @@ class Game():
                         self.on_end, self.on_space = False, True
 
 
-# começa a partir daqui:
+# start
+
+player_group = pygame.sprite.Group()
+enemy_group = pygame.sprite.Group()
+bullets_player_group = pygame.sprite.Group()
+bullets_enemy_group = pygame.sprite.Group()
+
+
 game = Game()
+player = Player()
+
+player_group.add(player)
+
 
 while True:
     clock.tick(FPS)

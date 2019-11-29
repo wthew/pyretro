@@ -3,22 +3,21 @@ from pygame.locals import  *
 
 screen_size = (800, 600)
 
-# caminhos importantes
+#
 PATH_TO_ASSETS = os.path.join(os.path.dirname(__file__), 'assets')
-PATH_TO_SFX = os.path.join(PATH_TO_ASSETS, 'soundtracks', 'sfx')
 
-# inicialização geral do pygame
+# init pygame
 pygame.init()
 pygame.display.init()
 pygame.mixer.init()
 screen = pygame.display.set_mode((screen_size))
 
-# carrega todos os sfx para a memoria
+# loads all sfx
 sfx = {}
-for file in glob.glob(os.path.join(PATH_TO_SFX, '*.wav')):
+for file in glob.glob(os.path.join(PATH_TO_ASSETS, 'soundtracks', 'sfx', '*.wav')):
     sfx[os.path.basename(file)] = pygame.mixer.Sound(file)
 
-# funcoes para ajudar
+
 def draw_text(surf, text, x, y, align="topleft", size=20, color=(225, 225, 225)):
     font = pygame.font.Font(os.path.join(PATH_TO_ASSETS, 'pixel-font.ttf'), size)
     text_surface = font.render(text, True, color)
@@ -30,14 +29,14 @@ def load_image(path, filename, scale=2):
     height, width = img.get_size()
     return pygame.transform.scale(img, (height * scale, width * scale))
 
-# cores
+# colors
 color_text = (0, 0, 0)
 color_bg = (225, 225, 225)
 
 class Button():
-    def __init__(self, tamX, tamY, posX, posY, text = '', flat = False):
-        self.tamX = tamX
-        self.tamY = tamY
+    def __init__(self, posX, posY, text = '', flat = False):
+        self.tamX = 250
+        self.tamY = 45
         self.posX = screen_size[0] / 2 - self.tamX / 2 if posX == 'center' else posX
         self.posY = posY
         self.text = text
