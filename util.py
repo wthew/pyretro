@@ -10,7 +10,7 @@ PATH_TO_ASSETS = os.path.join(os.path.dirname(__file__), 'assets')
 pygame.init()
 pygame.display.init()
 pygame.mixer.init()
-screen = pygame.display.set_mode((screen_size))
+screen = pygame.display.set_mode((screen_size), pygame.FULLSCREEN)
 
 # loads all sfx
 sfx = {}

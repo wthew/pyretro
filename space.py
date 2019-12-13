@@ -15,8 +15,6 @@ SPEED = 8 # velocidade dos movimentos em 'pixel por FPS' sendo o recomendavel 12
 BG = pygame.image.load(path.join(PATH_TO_ASSETS,'backgrounds','space.png'))
 FONT_COLOR = (225, 225 ,255)
 
-bullets = []
-
 clock = pygame.time.Clock()
 
 # Definindo eventos automaticos
@@ -82,17 +80,6 @@ class Player(pygame.sprite.Sprite):
 
         self.rect = Rect(self.x, self.y, self.width, self.height)
 
-    def shake(self):
-        self.rect[0] -= SPEED
-        self.draw(screen)
-        self.rect[1] -= (SPEED * 2)
-        self.draw(screen)
-        self.rect[0] += SPEED
-        self.draw(screen)
-        self.rect[1] += (SPEED * 3)
-        self.draw(screen)
-        self.rect[1] -= SPEED
-
     def draw(self, surf):
         self.battery.draw(surf)
 
@@ -102,7 +89,6 @@ class Player(pygame.sprite.Sprite):
             surf.blit( (img_heart if self.hp > i_heart else img_heart_broken), self.hearts[i_heart])
 
     def shoot(self):
-        self.shake()
         if not self.battery.blocked:
             self.battery.charge -= 4
             bullets_player_group.add(Bullet(self))
@@ -149,13 +135,13 @@ class Bullet(pygame.sprite.Sprite):
     def __init__(self, src, enemy=False):
         pygame.sprite.Sprite.__init__(self)
         sfx['bullet.wav'].play()
-        self.x = src.x + src.width // 2 - 30 // 2
-        self.y = src.y + src.height // 2 - 60 // 2
+        self.image = load_image('space', 'bullet.png', 2)
+        self.width, self.height = self.image.get_size()
+        self.x = src.x + src.width // 2 - self.width // 2
+        self.y = src.y + src.height // 2 - self.height // 2
         self.direction = 'down' if enemy else 'up'
         self.alive = True
-        self.image = pygame.image.load(path.join(PATH_TO_ASSETS, 'space', 'bullet.png')).convert_alpha()
-        self.image = pygame.transform.scale(self.image, (30, 60))
-        self.rect = Rect(self.x, self.y, 30, 60)
+        self.rect = Rect(self.x, self.y, self.width, self.height)
         self.damage = 50
         self.acc = 1
         if enemy:
@@ -166,7 +152,7 @@ class Bullet(pygame.sprite.Sprite):
         if self.alive:
             self.acc += .1
             self.y = self.y + SPEED * self.acc if self.direction is 'down' else self.y - SPEED * self.acc
-            self.rect = Rect(self.x, self.y, 5, 10)
+            self.rect = Rect(self.x, self.y, self.width, self.height)
 
             if self.y <= - 0 or self.y >= screen_size[1]:
                 self.alive = False
@@ -177,11 +163,11 @@ class Enemy(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
         self.init_x, self.init_y = x, y
         self.x, self.y = x, y
-        self.image = self.image = load_image('space', 'enemy.png', 4)
+        self.image = load_image('space', 'enemy.png', 4)
         self.width, self.height = self.image.get_size()
         self.rect = Rect(self.x - self.width // 2, self.y, self.width + self.width // 2, self.height)
         self.alive = True
-        self.hp = 50 # nem tao facil nem tao dificil de matar os inimigos
+        self.hp = 50
         self.direction = 'left' if self.y in [i for i in range((self.height * 2), (screen_size[1] // 2), (self.height * 4))] else 'right'
 
     def update(self, boss=False):
@@ -239,33 +225,16 @@ class Boss(Enemy):
         self.bar.draw(surf)
 
 
-class Platform():
+class Platform(pygame.sprite.Sprite):
     def __init__(self, x):
+        pygame.sprite.Sprite.__init__(self)
         self.x, self.y = x, screen_size[1] * 0.75
-        self.width, self.height = 100, 20
-        self.color = FONT_COLOR # Definindo a cor como 'Quase Branco'
+        self.image = load_image('space', 'platform.png', 4)
+        self.width, self.height = self.image.get_size()
+        print(self.image.get_size())
         self.rect = Rect(self.x, self.y, self.width, self.height)
-        self.hp = 1000 # tem que ser dificil quebrar a parede
+        self.hp = 1000
         self.alive = True
-
-    def update(self):
-        if self.alive:
-            if self.hp <= 250:
-                self.color = (150, 150, 150)
-
-            if self.hp <= 0: # somente quando ela qubrar
-                self.alive = False
-                self.x, self.y = screen_size[0], screen_size[1]
-                self.rect = Rect(self.x, self.y, self.width, self.height)
-                self.memento_mori = pygame.time.get_ticks()
-                print(self.memento_mori)
-        else:
-            print(f'{self.memento_mori} || {pygame.time.get_ticks()}')
-
-
-    def draw(self, surf):
-        pygame.draw.rect(screen, self.color, self.rect)
-
 
 
 class Space():
@@ -277,27 +246,32 @@ class Space():
         self.platforms = list()
         self.numb_platforms = 5
 
-        # variavel auxiliar para o alocamento das plataformas
+
         espaco = (screen_size[0] - self.numb_platforms * 100)/(self.numb_platforms + 1)
 
-        # Definindo posicoes das plataformas, com o maximo (recomendavel) sendo 5
         for i in range(self.numb_platforms):
-            self.platforms.append(Platform(espaco * (i+1) + (i*100)))
+            platform_group.add(Platform(espaco * (i+1) + (i*100)))
 
 
     def update(self):
         screen.fill(self.bg_color)
         player_group.update()
         enemy_group.update()
+        platform_group.update()
         bullets_enemy_group.update()
         bullets_player_group.update()
+
 
 
         if pygame.sprite.groupcollide(player_group, bullets_enemy_group, False, True, None):
             player.hp -= 1
             sfx['damage.wav'].play()
 
-        print(pygame.sprite.groupcollide(player_group, bullets_player_group, False, True, None))
+        pygame.sprite.groupcollide(platform_group, bullets_enemy_group, False, True, None)
+        pygame.sprite.groupcollide(platform_group, bullets_player_group, False, True, None)
+
+
+        # print(pygame.sprite.groupcollide(player_group, bullets_player_group, False, True, None))
 
 
         # for bullet in bullets:
@@ -358,11 +332,13 @@ class Space():
     def draw(self, surf):
         draw_text(screen, 'SCORE:', int(screen_size[0] * 0.80), 10, size=25, color=(225,225,255))
         draw_text(screen, str(self.score), int(screen_size[0] * 0.95), 10, size=25)
+
+        player.draw(surf)
+        enemy_group.draw(surf)
+        platform_group.draw(surf)
         bullets_enemy_group.draw(surf)
         bullets_player_group.draw(surf)
-        [platform.draw(surf) for platform in self.platforms]
-        enemy_group.draw(surf)
-        player.draw(surf)
+
 
 
 class Game():
@@ -479,6 +455,7 @@ class Game():
 
 player_group = pygame.sprite.Group()
 enemy_group = pygame.sprite.Group()
+platform_group = pygame.sprite.Group()
 bullets_player_group = pygame.sprite.Group()
 bullets_enemy_group = pygame.sprite.Group()
 
