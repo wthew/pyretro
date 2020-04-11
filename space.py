@@ -1,25 +1,27 @@
 ﻿# -*- coding: utf-8 -*-
-import pygame, sys, random
+import pygame
+import sys
+import random
 from os import path
-from pygame.locals import  *
+from pygame.locals import *
+from pygame.sprite import groupcollide, spritecollide
 from util import *
 
 
 pygame.display.set_caption('Space')
 
-# Variaveis importantes
 
-
-FPS = 60 # taxa de atualizacao
-SPEED = 8 # velocidade dos movimentos em 'pixel por FPS' sendo o recomendavel 12
-BG = pygame.image.load(path.join(PATH_TO_ASSETS,'backgrounds','space.png'))
-FONT_COLOR = (225, 225 ,255)
+FPS = 60
+SPEED = 8  # default 12
+DAMAGE = 50  # damage that player do in enemys
+ANIMATION_SPEED = 0.02
+BG = pygame.image.load(path.join(PATH_TO_ASSETS, 'backgrounds', 'space.png'))
+FONT_COLOR = (225, 225, 255)
 
 clock = pygame.time.Clock()
 
 # Definindo eventos automaticos
 BOT_SHOOT = pygame.event.Event(USEREVENT + 1)
-BOT_DIE = pygame.event.Event(USEREVENT + 2)
 NEXT_STAGE = pygame.event.Event(USEREVENT + 3)
 
 # pygame.time.set_timer(BOT_SHOOT.type, 240)
@@ -31,7 +33,6 @@ img_heart_broken = load_image('space', "heart_broken.png", 4)
 heart_width, heart_height = img_heart.get_size()
 
 
-# Classes
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
@@ -39,10 +40,11 @@ class Player(pygame.sprite.Sprite):
         self.width, self.height = self.image.get_size()
 
         # estado inicial
-        self.alive, self.shooting, self.direction = True, False, 'none'
+        self.alive, self.direction = True, 'none'
 
         # posição inicial
-        self.x, self.y = int(screen_size[0] * .5 - self.width * .5),  int(screen_size[1] * .8)
+        self.x = int(screen_size[0] * .5 - self.width * .5)
+        self.y = int(screen_size[1] * .8)
 
         self.rect = Rect(self.x, self.y, self.width, self.height)
         self.battery = Battery()
@@ -53,8 +55,13 @@ class Player(pygame.sprite.Sprite):
         y = int(screen_size[1] - heart_height * 2)
 
         for i in range(self.hp):
-            x = (screen_size[0]/2 - ((heart_width*1.5) *self.hp)/2) + (heart_width * 1.5) * i
-            self.hearts.append(Rect(x,y,heart_width, heart_height))
+
+            step = ((heart_width*1.5) * self.hp)/2
+
+            x = int(screen_size[0]/2 - step) + (heart_width * 1.5) * i
+
+            self.hearts.append(
+                Rect(int(x), int(y), int(heart_width), int(heart_height)))
 
     def move(self, direction):
         self.direction = direction
@@ -74,7 +81,6 @@ class Player(pygame.sprite.Sprite):
         if self.direction == 'left':
             self.x -= SPEED
 
-
         if self.direction == 'right':
             self.x += SPEED
 
@@ -86,19 +92,24 @@ class Player(pygame.sprite.Sprite):
         surf.blit(self.image, self.rect)
 
         for i_heart in range(len(self.hearts)):
-            surf.blit( (img_heart if self.hp > i_heart else img_heart_broken), self.hearts[i_heart])
+            img = img_heart if self.hp > i_heart else img_heart_broken
+            surf.blit(img, self.hearts[i_heart])
 
     def shoot(self):
         if not self.battery.blocked:
-            self.battery.charge -= 4
+            self.battery.discharge()
             bullets_player_group.add(Bullet(self))
 
-class Battery:
+    def take_damage(self):
+        self.hp -= 1
+
+
+class Battery():
     def __init__(self):
         self.sprites = {}
 
-        for i in glob.glob(path.join(PATH_TO_ASSETS, 'space', 'battery?.png')):
-            self.sprites[path.basename(i)] = pygame.image.load(i)
+        for _ in glob.glob(path.join(PATH_TO_ASSETS, 'space', 'battery?.png')):
+            self.sprites[path.basename(_)] = pygame.image.load(_)
 
         self.img = self.sprites['battery0.png']
         self.height, self.width = self.img.get_size()
@@ -108,17 +119,21 @@ class Battery:
 
         self.rect = Rect(self.x, self.y, self.width, self.height)
 
-    def update(self):
-        if self.charge <= 25: self.charge += .2
+    def discharge(self):
+        self.charge -= 10
 
-        if self.charge > 24:
+    def update(self):
+        if self.charge < 100:
+            self.charge += 1
+
+        if self.charge >= 100:
             self.img = self.sprites[f'battery{3}.png']
             self.blocked = False
 
-        elif self.charge > 16:
+        elif self.charge >= 75:
             self.img = self.sprites[f'battery{2}.png']
 
-        elif self.charge > 8:
+        elif self.charge > 25:
             self.img = self.sprites[f'battery{1}.png']
 
         elif self.charge > 0:
@@ -127,102 +142,170 @@ class Battery:
         else:
             self.blocked = True
 
-
     def draw(self, surf):
-        surf.blit(pygame.transform.scale(self.img, (self.height * 4, self.width * 4)), self.rect)
+        dimensions = (self.height * 4, self.width * 4)
+        surf.blit(pygame.transform.scale(self.img, dimensions), self.rect)
 
+
+# Entities
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, src, enemy=False):
         pygame.sprite.Sprite.__init__(self)
+
         sfx['bullet.wav'].play()
+
         self.image = load_image('space', 'bullet.png', 2)
         self.width, self.height = self.image.get_size()
-        self.x = src.x + src.width // 2 - self.width // 2
-        self.y = src.y + src.height // 2 - self.height // 2
-        self.direction = 'down' if enemy else 'up'
-        self.alive = True
-        self.rect = Rect(self.x, self.y, self.width, self.height)
-        self.damage = 50
-        self.acc = 1
+
         if enemy:
             self.image = pygame.transform.flip(self.image, False, True)
 
+        self.x = src.x + src.width // 2 - self.width // 2
+        self.y = src.y + src.height // 2 - self.height // 2
+        self.direction = 'down' if enemy else 'up'
+
+        self.rect = Rect(
+            int(self.x), int(self.y),
+            int(self.width), int(self.height))
+
+        self.acc = 1
 
     def update(self):
-        if self.alive:
-            self.acc += .1
-            self.y = self.y + SPEED * self.acc if self.direction is 'down' else self.y - SPEED * self.acc
-            self.rect = Rect(self.x, self.y, self.width, self.height)
+        if self.y > screen_size[1] or self.y < 0:
+            self.kill()
 
-            if self.y <= - 0 or self.y >= screen_size[1]:
-                self.alive = False
+        self.acc += .1
+
+        if self.direction == 'down':
+            self.y = self.y + SPEED * self.acc
+        else:
+            self.y = self.y - SPEED * self.acc
+
+        self.rect = Rect(
+            int(self.x), int(self.y), int(self.width), int(self.height))
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, direction):
         pygame.sprite.Sprite.__init__(self)
+
         self.init_x, self.init_y = x, y
         self.x, self.y = x, y
-        self.image = load_image('space', 'enemy.png', 4)
+
+        self.sprites = {}
+        self.sprite_i = 0
+
+        for i in glob.glob(path.join(PATH_TO_ASSETS, 'space', 'enemy?.png')):
+            key = path.basename(i)
+            self.sprites[key] = load_image('space', key, 4)
+
+        self.image = self.sprites[f'enemy{self.sprite_i}.png']
+
         self.width, self.height = self.image.get_size()
-        self.rect = Rect(self.x - self.width // 2, self.y, self.width + self.width // 2, self.height)
-        self.alive = True
+
+        self.rect = Rect(
+            self.x - self.width // 2,
+            self.y,
+            self.width + self.width // 2,
+            self.height)
+
         self.hp = 50
-        self.direction = 'left' if self.y in [i for i in range((self.height * 2), (screen_size[1] // 2), (self.height * 4))] else 'right'
+
+        self.direction = direction
 
     def update(self, boss=False):
-        if self.hp <= 0:
-            self.alive = False
-            pygame.event.post(BOT_DIE)
+        self.sprite_i = (self.sprite_i + ANIMATION_SPEED) % 2
+        self.image = self.sprites[f'enemy{int(self.sprite_i)}.png']
 
-        if self.direction is 'right': self.x += SPEED
-        if self.direction is 'left': self.x -= SPEED
-        if self.direction is 'down': self.y += SPEED
-        if self.direction is 'up': self.y -= SPEED
+        if self.direction == 'right':
+            self.x += SPEED
 
-        if self.direction is 'right' and self.x >= self.init_x + self.width * 2: self.direction = 'left'
+        if self.direction == 'left':
+            self.x -= SPEED
 
-        if self.direction is 'left' and self.x <= self.init_x - self.width * 2: self.direction = 'right'
+        if self.direction == 'right' and self.x > self.init_x + self.width * 2:
+            self.direction = 'left'
 
-        if self.x >= screen_size[0] - self.width * 2: self.x -= 10
+        if self.direction == 'left' and self.x < self.init_x - self.width * 2:
+            self.direction = 'right'
 
-        if self.x <= self.width: self.x += 10
-
-        if self.y >= screen_size[1] * .5: self.direction = 'up'
-
-        if self.y <= 50: self.direction = 'down'
-
-        self.rect = Rect(self.x, self.y, self.width, self.height)
-
+        self.rect = Rect(
+            int(self.x), int(self.y),
+            int(self.width), int(self.height))
 
     def draw(self, surf):
-    	screen.blit(self.image, self.rect)
+        screen.blit(self.image, self.rect)
 
     def shoot(self):
         bullets_enemy_group.add(Bullet(self, enemy=True))
 
+    def take_damage(self):
+        self.hp -= DAMAGE
 
-class Boss(Enemy):
+
+class Boss(pygame.sprite.Sprite):
     def __init__(self):
-        self.image = self.image = load_image('space', 'boss.png', 8)
+        pygame.sprite.Sprite.__init__(self)
+
+        self.image = load_image('space', 'boss.png', 8)
         self.width, self.height = self.image.get_size()
-        self.x, self.y = screen_size[0] / 2 - self.width / 2, screen_size[1] / 2 - self.width / 2
-        self.rect = Rect(self.x, self.y, self.width, self.height)
+        self.x = screen_size[0] / 2 - self.width / 2
+        self.y = screen_size[1] / 2 - self.height / 2
+        self.rect = Rect(
+            int(self.x), int(self.y),
+            int(self.width), int(self.height))
+
         self.alive = True
         self.hp = 1000
-        self.direction = 'none'
+        self.direction = random.choice(['left', 'right'])
         self.acc = 1
-        self.bar = Bar_Horizontal(self.hp, screen_size[0]*.25, 15, screen_size[0]*.5, 20)
 
     def update(self):
-        super().update()
-        self.bar.update(self.hp)
-        if pygame.time.get_ticks() % 50 == 0:
+
+        if self.y >= screen_size[1] // 2 - self.height:
+            self.y -= SPEED
+            self.direction = random.choice(['left', 'right'])
+
+        if self.y <= self.height:
+            self.y += SPEED
+            self.direction = random.choice(['left', 'right'])
+
+        if self.x >= screen_size[0] - self.width * 2:
+            self.x -= SPEED
+            self.direction = random.choice(['up', 'down'])
+
+        if self.x <= self.width:
+            self.x += SPEED
+            self.direction = random.choice(['up', 'down'])
+
+        if self.direction == 'up':
+            self.y -= SPEED
+
+        if self.direction == 'down':
+            self.y += SPEED
+
+        if self.direction == 'right':
+            self.x += SPEED
+
+        if self.direction == 'left':
+            self.x -= SPEED
+
+        if pygame.time.get_ticks() % 25 == 0:
             self.direction = random.choice(['up', 'down', 'left', 'right'])
+            self.shoot()
+
+        self.rect = Rect(
+            int(self.x), int(self.y),
+            int(self.width), int(self.height))
+
+    def shoot(self):
+        bullets_enemy_group.add(Bullet(self, enemy=True))
 
     def draw(self, surf):
-        super().draw(surf)
-        self.bar.draw(surf)
+        screen.blit(self.image, self.rect)
+
+    def take_damage(self):
+        self.hp -= DAMAGE
 
 
 class Platform(pygame.sprite.Sprite):
@@ -231,157 +314,274 @@ class Platform(pygame.sprite.Sprite):
         self.x, self.y = x, screen_size[1] * 0.75
         self.image = load_image('space', 'platform.png', 4)
         self.width, self.height = self.image.get_size()
-        print(self.image.get_size())
-        self.rect = Rect(self.x, self.y, self.width, self.height)
+        self.rect = Rect(
+            int(self.x), int(self.y), int(self.width), int(self.height))
         self.hp = 1000
         self.alive = True
 
 
-class Space():
-    def __init__(self, c=1):
-        self.stage()
-        self.bg_color = (0, 0, 0)
-        self.score = 0
-        self.counter = c
-        self.platforms = list()
-        self.numb_platforms = 5
+# Screens
+class Menu():
+    def __init__(self, callbacks={}):
+        self.buttons = {
+            'start': Button('center', 15, 'Play!', callbacks['start_space']),
+            'game_over': Button('center', screen_size[1]/4, 'Try Again')
+        }
 
+    def listen(self, event):
+        keys = {
+            'start': [K_RETURN, K_SPACE],
+            'exit': [K_ESCAPE, K_BACKSPACE]}
 
-        espaco = (screen_size[0] - self.numb_platforms * 100)/(self.numb_platforms + 1)
+        if event.type == KEYDOWN:
+            if event.key in keys['exit']:
+                sys.exit()
 
-        for i in range(self.numb_platforms):
-            platform_group.add(Platform(espaco * (i+1) + (i*100)))
+            if event.key in keys['start']:
+                self.buttons['start'].callback()
 
+        if event.type == MOUSEBUTTONDOWN:
+            if self.buttons['start'].clicked():
+                self.buttons['start'].callback()
 
     def update(self):
-        screen.fill(self.bg_color)
+        pass
+
+    def draw(self, surf):
+        surf.blit(BG, (0, 0))
+
+        self.buttons['start'].draw(surf)
+
+        draw_text(
+            surf,
+            f'SPACE v2',
+            screen_size[0] * .5,
+            screen_size[1] - 150,
+            size=20, color=FONT_COLOR, align='center')
+
+        draw_text(
+            surf,
+            f'Desenvolvido por Wellington',
+            screen_size[0] * .5,
+            screen_size[1] - 100,
+            size=20, color=FONT_COLOR, align='center')
+        
+        draw_text(
+            surf,
+            f'Testado por Samuel',
+            screen_size[0] * .5,
+            screen_size[1] - 50,
+            size=20, color=FONT_COLOR, align='center')
+
+
+class Space():
+    def __init__(self, boss=False, callbacks={}):
+        self.bg_image = load_image('space', 'bg-space1.png', 1)
+        self.bg_size = self.bg_image.get_size()
+        self.bg_x = self.bg_size[0] // 2 - screen_size[0]
+        self.bg_shift = 0
+        self.bg_color = (0, 0, 0)
+        self.platforms = 5
+        self.callbacks = callbacks
+        self.boss = boss
+
+        espaco = int(
+            screen_size[0] - self.platforms * 100) / (self.platforms + 1)
+
+        for i in range(self.platforms):
+            platform_group.add(Platform(espaco * (i+1) + (i*100)))
+
+        if self.boss:
+            enemy_group.add(Boss())
+
+        else:
+            d = random.choice(['left', 'right'])
+            enemy_model = Enemy(screen_size[0], screen_size[1], d)
+
+            y_iterator = range(
+                (enemy_model.height * 2), (screen_size[1] // 2),
+                (enemy_model.height * 2))
+
+            x_iterator = range(
+                (enemy_model.width * 4),
+                (screen_size[0] - enemy_model.width * 4),
+                (enemy_model.width * 2))
+
+            for y in y_iterator:
+                d = 'left' if d == 'right' else 'right'
+                for x in x_iterator:
+                    enemy_group.add(Enemy(x, y, d))
+
+            del(enemy_model)
+
+    def listen(self, event):
+        keys = {
+            'attack': [K_SPACE],
+            'left': [K_a, K_LEFT],
+            'right': [K_d, K_RIGHT],
+            'exit': [K_ESCAPE]}
+
+        if event.type == KEYDOWN:
+            if event.key in keys['attack']:
+                player.shoot()
+
+            if event.key in keys['left']:
+                player.move('left')
+
+            if event.key in keys['right']:
+                player.move('right')
+
+            if event.key in keys['exit']:
+                self.callbacks['pause_space']()
+
+        if event.type == KEYUP:
+            if event.key in keys['left'] or event.key in keys['right']:
+                player.direction = 'none'
+
+        if event.type == BOT_SHOOT.type:
+            random.choice(enemy_group.sprites()).shoot()
+
+    def update(self):
+
         player_group.update()
         enemy_group.update()
         platform_group.update()
         bullets_enemy_group.update()
         bullets_player_group.update()
 
+        # bullets cant pass through platforms!
+        groupcollide(bullets_enemy_group, platform_group, True, False)
+        groupcollide(bullets_player_group, platform_group, True, False)
 
-
-        if pygame.sprite.groupcollide(player_group, bullets_enemy_group, False, True, None):
-            player.hp -= 1
+        # player must take damage!
+        if groupcollide(bullets_enemy_group, player_group, True, False):
+            player.take_damage()
             sfx['damage.wav'].play()
 
-        pygame.sprite.groupcollide(platform_group, bullets_enemy_group, False, True, None)
-        pygame.sprite.groupcollide(platform_group, bullets_player_group, False, True, None)
+        # hited enemy
+        hited_enemys = groupcollide(
+            bullets_player_group,
+            enemy_group,
+            True, False,
+            pygame.sprite.collide_mask)
 
+        for bullet, enemy in hited_enemys.items():
+            enemy[0].take_damage()
 
-        # print(pygame.sprite.groupcollide(player_group, bullets_player_group, False, True, None))
+            if enemy[0].hp <= 0:
+                sfx['dead_enemy.wav'].play()
+                enemy_group.remove(enemy[0])
 
-
-        # for bullet in bullets:
-        #     bullet.update() if bullet.alive else bullets.remove(bullet)
-        #
-        #     for platform in self.platforms:
-        #         platform.update() if platform.alive else self.platforms.remove(platform)
-        #         if bullet.rect.colliderect(platform):
-        #             platform.hp -= bullet.damage
-        #             bullets.remove(bullet)
-        #
-        #     for enemy in self.enemys:
-        #         if bullet.rect.colliderect(enemy.rect) and bullet.direction == 'up':
-        #             enemy.hp -= bullet.damage
-        #             bullets.remove(bullet)
-        #
-        #     if bullet.rect.colliderect(player.rect) and bullet.direction == 'down':
-        #         bullets.remove(bullet)
-        #         player.hp -= 1
-        #         sfx['damage.wav'].play()
-
-        # if len(bullets) > 100: bullets.remove(bullets[0])
-
-        # if not player.alive:
-        #     self.stage()
-        #     player.__init__()
-        #     self.score = 0
-        #     return False
-        #
-        # if len(self.enemys) == 0:
-        #     self.counter += 1
-        #     pygame.event.post(NEXT_STAGE)
-        #     player.x, player.direction = screen_size[0] * .5, 'none'
-        #
-        #     if self.counter in [i for i in range(0, 50, 5)] or self.counter >= 50:
-        #         self.stage(boss=True)
-        #     else:
-        #         self.stage()
-        #
-        # [enemy.update() if enemy.alive else self.enemys.remove(enemy) for enemy in self.enemys]
-        # return True
-
-    def stage(self, boss=False):
-
-        if boss:
-            self.enemys.append(Boss())
-
-        else:
-            enemy_model = Enemy(screen_size[0], screen_size[1])
-
-            for y in range((enemy_model.height * 2), (screen_size[1] // 2), (enemy_model.height * 2)):
-                for x in range((enemy_model.width * 4), (screen_size[0] - enemy_model.width * 4), (enemy_model.width * 2)):
-                    enemy_group.add(Enemy(x, y))
-
-            del(enemy_model)
-
+        # compute how many moves the backgound
+        self.bg_shift = int((player.x - screen_size[0] // 2) * .25)
 
     def draw(self, surf):
-        draw_text(screen, 'SCORE:', int(screen_size[0] * 0.80), 10, size=25, color=(225,225,255))
-        draw_text(screen, str(self.score), int(screen_size[0] * 0.95), 10, size=25)
-
-        player.draw(surf)
+        screen.fill(self.bg_color)
+        surf.blit(self.bg_image, (self.bg_x + self.bg_shift, 0))
         enemy_group.draw(surf)
+        player.draw(surf)
         platform_group.draw(surf)
         bullets_enemy_group.draw(surf)
         bullets_player_group.draw(surf)
 
 
+class Scoreboard():
+    def __init__(self, score=0):
+        self.score = score
+        self.done = False
+        self.wait = 0
+
+    def update(self):
+        if self.wait >= 250:
+            self.done = True
+
+        self.wait += 1
+
+    def draw(self, surf):
+        surf.blit(pygame.Surface(screen_size), (0, 0))
+
+        draw_text(
+            surf,
+            f'SCORE:{self.score}',
+            screen_size[0] // 2,
+            screen_size[1] // 2,
+            align='center', size=20, color=FONT_COLOR)
+
+        draw_text(
+            surf,
+            'Loading...',
+            screen_size[0] * .1,
+            screen_size[1] * .9,
+            size=20, color=FONT_COLOR)
+
 
 class Game():
     def __init__(self):
-        self.on_menu, self.on_space, self.on_load, self.on_end = True, False, False, False
-        self.btn_start = Button(250, 45, 'center', 15)
-        self.btn_end = Button(250, 45, 'center', screen_size[1]/4)
-        self.space = Space()
+        self.on_menu = True
+        self.on_space = False
+        self.on_scoreboard = False
+        self.on_end = False
+        self.score = 0
 
+        self.make_screens()
 
     def update(self):
-        if self.on_space: # no 'espaco'
+        # clean memory
+        self.optimize()
+
+        if self.on_menu:
+            self.menu.update()
+
+        if self.on_space:
             self.space.update()
-            if not self.on_space: self.on_end = True
 
-        if self.on_load:
-            let_b = pygame.time.get_ticks()
-            if let_b - self.let_a >= 2500:
-                self.on_load = False
+            if len(enemy_group.sprites()) == 0:
+                self.score += 100
+                self.on_space = False
+                self.make_screens(score=self.score)
+                self.on_scoreboard = True
+                player.move('none')
+                make_groups()
+
+            if player.hp <= 0:
+                self.on_space = False
+                self.on_menu = True
+                self.score = 0
+                self.make_screens()
+
+        if self.on_scoreboard:
+            self.scoreboard.update()
+
+            if self.scoreboard.done:
+                self.on_scoreboard = False
+                boss = True if self.score in [
+                    i for i in range(0, 100000, 1000)
+                ] or self.score > 100000 else False
+
+                self.make_screens(boss=boss)
                 self.on_space = True
-
-
 
     def draw(self, surf):
         if self.on_menu:
-            surf.blit(BG, (0, 0))
-            self.btn_start.update(surf, 'Start Game')
-            draw_text(surf, 'SPACE v1.6', screen_size[0]/4 * 3, screen_size[1] - 150, size=20, color=FONT_COLOR)
-            draw_text(surf, 'by: TheW', screen_size[0]/4 * 3, screen_size[1] - 100, size=20, color=FONT_COLOR)
+            self.menu.draw(surf)
 
-        if self.on_load:
-            surf.blit(pygame.Surface(screen_size), (0, 0))
-            draw_text(surf, 'Loading...', screen_size[0] * .1, screen_size[1] * .9, size=20, color=FONT_COLOR)
+        if self.on_scoreboard:
+            self.scoreboard.draw(surf)
 
-
-        elif self.on_space:
+        if self.on_space:
             self.space.draw(surf)
 
-        elif self.on_end:# no game over
+        if self.on_end:
             surf.blit(BG, (0, 0))
-            self.btn_end.update(surf, 'Try Again')
-            draw_text(surf, 'Game Over', screen_size[0] / 2, screen_size[1] / 8, align='center', size=25, color=FONT_COLOR)
+            self.buttons['game_over'].draw(surf)
+            # self.btn_end.update(surf, 'Try Again')
 
+            draw_text(
+                surf,
+                'Game Over',
+                screen_size[0] / 2,
+                screen_size[1] / 8,
+                align='center', size=25, color=FONT_COLOR)
 
         pygame.display.flip()
 
@@ -392,79 +592,76 @@ class Game():
                 sys.exit()
 
             if event.type == KEYDOWN and event.key == K_F4:
-                pygame.display.set_mode((screen_size[0], screen_size[1])) if screen.get_flags() & FULLSCREEN else pygame.display.set_mode((screen_size[0], screen_size[1]), pygame.FULLSCREEN)
 
-            # Eventos So Disparados enquanto no menu
+                if screen.get_flags() & FULLSCREEN:
+                    pygame.display.set_mode(screen_size)
+                else:
+                    pygame.display.set_mode(screen_size, pygame.FULLSCREEN)
+
             if self.on_menu:
-                if event.type == KEYDOWN and event.key == K_ESCAPE:
-                    sys.exit()
-
-                if event.type == KEYDOWN and event.key == K_RETURN:
-                    pygame.mixer.music.stop()
-                    self.on_menu, self.on_space = False, True
-
-                if event.type == MOUSEBUTTONDOWN:
-                    mouse_x, mouse_y = pygame.mouse.get_pos()
-                    if self.btn_start.isClicked(mouse_x, mouse_y):
-                        pygame.mixer.music.stop()
-                        self.on_menu, self.on_space = False, True
-
-            # Eventos So Disparados enquanto no 'espaco'
-
-            if event.type == KEYDOWN and event.key == K_ESCAPE:
-                self.on_space = False
-                self.on_menu = True
+                self.menu.listen(event)
 
             if self.on_space:
-                if event.type == KEYDOWN and (event.key == K_a or event.key == K_SPACE):
-                     player.shoot()
-                if event.type == KEYDOWN and (event.key == K_a or event.key == K_LEFT):
-                     player.move('left')
-                if event.type == KEYDOWN and (event.key == K_d or event.key == K_RIGHT):
-                     player.move('right')
-                if event.type == KEYUP:
-                    if (event.key == K_a or event.key == K_d) or (event.key == K_LEFT or event.key == K_RIGHT):
-                         player.direction = 'none'
-
-                if event.type == NEXT_STAGE.type:
-                    self.on_space = False
-                    self.on_load = True
-                    self.let_a = pygame.time.get_ticks()
-
-                if event.type == BOT_SHOOT.type:
-                    random.choice(enemy_group.sprites()).shoot()
-
-                if event.type == BOT_DIE.type:
-                    sfx['dead_enemy.wav'].play()
-                    self.space.score += 1
+                self.space.listen(event)
 
             # Eventos So Disparados enquanto morto
             if self.on_end:
-                if event.type == KEYDOWN and event.key == K_RETURN:
-                    pygame.mixer.music.stop()
-                    self.on_end, self.on_space = False, True
+                pass
+                # if event.type == KEYDOWN and event.key == K_RETURN:
+                #     pygame.mixer.music.stop()
+                #     self.on_end, self.on_space = False, True
 
-                if event.type == MOUSEBUTTONDOWN:
-                    mouse_x, mouse_y = pygame.mouse.get_pos()
-                    if self.btn_end.isClicked(mouse_x, mouse_y):
-                        pygame.mixer.music.stop()
-                        self.on_end, self.on_space = False, True
+                # if event.type == MOUSEBUTTONDOWN:
+                #     mouse_x, mouse_y = pygame.mouse.get_pos()
+                #     if self.btn_end.isClicked(mouse_x, mouse_y):
+                #         pygame.mixer.music.stop()
+                #         self.on_end, self.on_space = False, True
+
+    def callback_start_space(self):
+        pygame.mixer.music.stop()
+        self.on_menu, self.on_space = False, True
+
+    def callback_pause_space(self):
+        self.on_menu, self.on_space = True, False
+
+    def make_screens(self, boss=False, score=0):
+        self.menu = Menu(callbacks={
+            'start_space': self.callback_start_space
+        })
+        self.space = Space(boss, callbacks={
+            'pause_space': self.callback_pause_space
+        })
+        self.scoreboard = Scoreboard(score)
+
+    def optimize(self):
+        if len(bullets_player_group.sprites()) > 30:
+            to_remove = bullets_player_group.sprites()[0]
+            bullets_player_group.remove(to_remove)
 
 
 # start
+player = Player()
+# print([i for i in range(0, 100000, 500)])
 
-player_group = pygame.sprite.Group()
-enemy_group = pygame.sprite.Group()
-platform_group = pygame.sprite.Group()
-bullets_player_group = pygame.sprite.Group()
-bullets_enemy_group = pygame.sprite.Group()
 
+def make_groups():
+    global enemy_group
+    global platform_group
+    global bullets_player_group
+    global bullets_enemy_group
+    global player_group
+
+    enemy_group = pygame.sprite.Group()
+    platform_group = pygame.sprite.Group()
+    bullets_player_group = pygame.sprite.Group()
+    bullets_enemy_group = pygame.sprite.Group()
+    player_group = pygame.sprite.Group()
+    player_group.add(player)
+
+
+make_groups()
 
 game = Game()
-player = Player()
-
-player_group.add(player)
-
 
 while True:
     clock.tick(FPS)

@@ -225,11 +225,15 @@ config_canvas.items.append([easy_btn_bool, world.dificuldade])
 
 
 while True:
-    if config: config_canvas.update()
+    if config:
+        config_canvas.update()
 
-    elif world.pristine: menu_canvas.update()
+    elif world.pristine:
+        menu_canvas.update()
 
-    else: over_canvas.update()
+    else:
+        over_canvas.update()
+
     player.animation()
 
     for event in pygame.event.get():
@@ -241,17 +245,21 @@ while True:
 
         if event.type == KEYDOWN and event.key == K_F4:
             size = (screen_size_X, screen_size_Y)
-            pygame.display.set_mode(size) if screen.get_flags() & FULLSCREEN else pygame.display.set_mode(size, pygame.FULLSCREEN)
+            pygame.display.set_mode(size if screen.get_flags() & FULLSCREEN else size, pygame.FULLSCREEN)
 
         if event.type == KEYDOWN:
             if config:
-                if event.key == K_KP1: Canvas().changeColor(playerLight, appleLight, bgLight)
+                if event.key == K_KP1:
+                    Canvas().changeColor(playerLight, appleLight, bgLight)
 
-                if event.key == K_KP2: Canvas().changeColor(playerClassic, appleClassic, bgClassic)
+                if event.key == K_KP2:
+                    Canvas().changeColor(playerClassic, appleClassic, bgClassic)
 
-                if event.key == K_KP3: Canvas().changeColor(playerDark, appleDark, bgDark)
+                if event.key == K_KP3:
+                    Canvas().changeColor(playerDark, appleDark, bgDark)
 
-                if event.key == K_KP4: Canvas().changeColor(playerCyan, appleCyan, bgCyan)
+                if event.key == K_KP4:
+                    Canvas().changeColor(playerCyan, appleCyan, bgCyan)
             else:
                 if event.key == K_RETURN:
                     world.start()
@@ -259,16 +267,19 @@ while True:
         if event.type == MOUSEBUTTONDOWN:
             x, y = pygame.mouse.get_pos()
             if play_btn.isClicked(x, y):
-                if config: config = False
+                if config:
+                    config = False
 
-                else: world.start()
+                else:
+                    world.start()
 
             if config_btn.isClicked(x, y):
                 if config:
                     size = (screen_size_X, screen_size_Y)
                     pygame.display.set_mode(size) if screen.get_flags() & FULLSCREEN else pygame.display.set_mode(size, pygame.FULLSCREEN)
 
-                else: config = True
+                else:
+                    config = True
 
             if easy_btn.isClicked(x, y):
                 if config:
@@ -290,18 +301,27 @@ while True:
                 sys.exit()
 
             elif event.type == KEYDOWN:
-                if (event.key == K_w or event.key == K_UP) and player.direction != 'DOWN':
+                keys_up = [K_w, K_UP]
+                keys_down = [K_s, K_DOWN]
+                keys_left = [K_a, K_LEFT]
+                keys_right = [K_d, K_RIGHT]
+
+                if (event.key in keys_up) and player.direction != 'DOWN':
                     player.last_direction = player.direction
                     player.direction = 'UP'
-                if (event.key == K_s or event.key == K_DOWN) and player.direction != 'UP':
+
+                if (event.key in keys_down) and player.direction != 'UP':
                     player.last_direction = player.direction
                     player.direction = 'DOWN'
-                if (event.key == K_a or event.key == K_LEFT) and player.direction != 'RIGHT':
+
+                if (event.key in keys_left) and player.direction != 'RIGHT':
                     player.last_direction = player.direction
                     player.direction = 'LEFT'
-                if (event.key == K_d or event.key == K_RIGHT) and player.direction != 'LEFT':
+
+                if (event.key keys_right) and player.direction != 'LEFT':
                     player.last_direction = player.direction
                     player.direction = 'RIGHT'
+
                 if event.key == K_ESCAPE:
                     player.alive = False
 
