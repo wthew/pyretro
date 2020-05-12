@@ -15,16 +15,13 @@ FPS = 60
 SPEED = 8  # default 12
 DAMAGE = 50  # damage that player do in enemys
 ANIMATION_SPEED = 0.02
-BG = pygame.image.load(path.join(PATH_TO_ASSETS, 'backgrounds', 'space.png'))
 FONT_COLOR = (225, 225, 255)
 
 clock = pygame.time.Clock()
 
 # Definindo eventos automaticos
 BOT_SHOOT = pygame.event.Event(USEREVENT + 1)
-NEXT_STAGE = pygame.event.Event(USEREVENT + 3)
 
-# pygame.time.set_timer(BOT_SHOOT.type, 240)
 pygame.time.set_timer(BOT_SHOOT.type, 512)
 
 # load images
@@ -101,7 +98,7 @@ class Player(pygame.sprite.Sprite):
             bullets_player_group.add(Bullet(self))
 
     def take_damage(self):
-        self.hp -= 1
+        self.hp -= 0
 
 
 class Battery():
@@ -127,17 +124,17 @@ class Battery():
             self.charge += 1
 
         if self.charge >= 100:
-            self.img = self.sprites[f'battery{3}.png']
+            self.img = self.sprites['battery3.png']
             self.blocked = False
 
         elif self.charge >= 75:
-            self.img = self.sprites[f'battery{2}.png']
+            self.img = self.sprites['battery2.png']
 
         elif self.charge > 25:
-            self.img = self.sprites[f'battery{1}.png']
+            self.img = self.sprites['battery1.png']
 
         elif self.charge > 0:
-            self.img = self.sprites[f'battery{0}.png']
+            self.img = self.sprites['battery0.png']
 
         else:
             self.blocked = True
@@ -147,7 +144,6 @@ class Battery():
         surf.blit(pygame.transform.scale(self.img, dimensions), self.rect)
 
 
-# Entities
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, src, enemy=False):
         pygame.sprite.Sprite.__init__(self)
@@ -320,24 +316,24 @@ class Platform(pygame.sprite.Sprite):
         self.alive = True
 
 
-# Screens
 class Menu():
     def __init__(self, callbacks={}):
+        self.bg = load_image('space', 'bg-menu.png', 1)
+
         self.buttons = {
             'start': Button('center', 15, 'Play!', callbacks['start_space']),
-            'game_over': Button('center', screen_size[1]/4, 'Try Again')
-        }
+            'game_over': Button('center', screen_size[1]/4, 'Try Again')}
 
-    def listen(self, event):
-        keys = {
+        self.keys = {
             'start': [K_RETURN, K_SPACE],
             'exit': [K_ESCAPE, K_BACKSPACE]}
 
+    def listen(self, event):
         if event.type == KEYDOWN:
-            if event.key in keys['exit']:
+            if event.key in self.keys['exit']:
                 sys.exit()
 
-            if event.key in keys['start']:
+            if event.key in self.keys['start']:
                 self.buttons['start'].callback()
 
         if event.type == MOUSEBUTTONDOWN:
@@ -348,13 +344,13 @@ class Menu():
         pass
 
     def draw(self, surf):
-        surf.blit(BG, (0, 0))
+        surf.blit(self.bg, (0, 0))
 
         self.buttons['start'].draw(surf)
 
         draw_text(
             surf,
-            f'SPACE v2',
+            f'SPACE v2.1',
             screen_size[0] * .5,
             screen_size[1] - 150,
             size=20, color=FONT_COLOR, align='center')
@@ -365,7 +361,7 @@ class Menu():
             screen_size[0] * .5,
             screen_size[1] - 100,
             size=20, color=FONT_COLOR, align='center')
-        
+
         draw_text(
             surf,
             f'Testado por Samuel',
@@ -376,7 +372,7 @@ class Menu():
 
 class Space():
     def __init__(self, boss=False, callbacks={}):
-        self.bg_image = load_image('space', 'bg-space1.png', 1)
+        self.bg_image = load_image('space', 'bg-space.png', 1)
         self.bg_size = self.bg_image.get_size()
         self.bg_x = self.bg_size[0] // 2 - screen_size[0]
         self.bg_shift = 0
@@ -587,10 +583,6 @@ class Game():
 
     def listen(self):
         for event in pygame.event.get():
-            # Eventos Disparados em Qualquer Momento
-            if event.type == QUIT:
-                sys.exit()
-
             if event.type == KEYDOWN and event.key == K_F4:
 
                 if screen.get_flags() & FULLSCREEN:
@@ -604,7 +596,6 @@ class Game():
             if self.on_space:
                 self.space.listen(event)
 
-            # Eventos So Disparados enquanto morto
             if self.on_end:
                 pass
                 # if event.type == KEYDOWN and event.key == K_RETURN:
@@ -641,7 +632,6 @@ class Game():
 
 # start
 player = Player()
-# print([i for i in range(0, 100000, 500)])
 
 
 def make_groups():

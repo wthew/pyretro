@@ -23,10 +23,11 @@ config = False
 pygame.init()
 pygame.display.init()
 pygame.display.set_caption('Little Snake')
-font = pygame.font.Font('Assets/pixel-font.ttf', 25)
+font = pygame.font.Font('assets/pixel-font.ttf', 25)
 
 screen = pygame.display.set_mode((screen_size_X, screen_size_Y))
 clock = pygame.time.Clock()
+
 
 class Canvas():
     def __init__(self):
@@ -75,23 +76,23 @@ class World():
         apple.update()
         pygame.display.update()
 
-class Button():
-    def __init__(self, tamX, tamY, posX, posY, text = '', flat = False):
-        self.tamX = tamX
-        self.tamY = tamY
-        self.posX = posX
-        self.posY = posY
-        self.text = text
-        self.flat = flat
+# class Button():
+#     def __init__(self, tamX, tamY, posX, posY, text = '', flat = False):
+#         self.tamX = tamX
+#         self.tamY = tamY
+#         self.posX = posX
+#         self.posY = posY
+#         self.text = text
+#         self.flat = flat
 
-    def update(self, text):
-        color_text = player.color if self.flat else world.bg_color
-        color_bg = world.bg_color if self.flat else player.color
-        pygame.draw.rect(screen, color_bg, [self.posX, self.posY, self.tamX, self.tamY])
-        screen.blit(font.render(text, True, color_text), [self.posX + self.tamX * 0.10 , self.posY + 1])
+#     def update(self, text):
+#         color_text = player.color if self.flat else world.bg_color
+#         color_bg = world.bg_color if self.flat else player.color
+#         pygame.draw.rect(screen, color_bg, [self.posX, self.posY, self.tamX, self.tamY])
+#         screen.blit(font.render(text, True, color_text), [self.posX + self.tamX * 0.10 , self.posY + 1])
 
-    def isClicked(self, mouseX, mouseY):
-        return (mouseX > self.posX and mouseX < self.posX + self.tamX and mouseY > self.posY and mouseY < self.posY + self.tamY)
+#     def isClicked(self, mouseX, mouseY):
+#         return (mouseX > self.posX and mouseX < self.posX + self.tamX and mouseY > self.posY and mouseY < self.posY + self.tamY)
 
 
 
@@ -318,7 +319,7 @@ while True:
                     player.last_direction = player.direction
                     player.direction = 'LEFT'
 
-                if (event.key keys_right) and player.direction != 'LEFT':
+                if (event.key in keys_right) and player.direction != 'LEFT':
                     player.last_direction = player.direction
                     player.direction = 'RIGHT'
 
