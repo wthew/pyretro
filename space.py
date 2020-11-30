@@ -3,6 +3,7 @@ import pygame
 import sys
 import random
 from os import path
+from time import sleep
 from pygame.locals import *
 from pygame.sprite import groupcollide, spritecollide
 from util import *
@@ -316,17 +317,34 @@ class Platform(pygame.sprite.Sprite):
         self.alive = True
 
 
-class Menu():
-    def __init__(self, callbacks={}):
+class Screen():
+    def __init__(self, **kwargs):
+        self.navigate = kwargs.get('navigate', lambda: 0)
+
+    def update(self):
+        pass
+    
+    def listen(self):
+        pass
+
+    def draw(self, surf):
+        pass
+
+
+class Menu(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.bg = load_image('space', 'bg-menu.png', 1)
 
         self.buttons = {
-            'start': Button('center', 15, 'Play!', callbacks['start_space']),
-            'game_over': Button('center', screen_size[1]/4, 'Try Again')}
+            'start': Button('center', 15, 'Play!', lambda: self.navigate('space')),
+            'game_over': Button('center', screen_size[1]/4, 'Try Again')
+        }
 
         self.keys = {
             'start': [K_RETURN, K_SPACE],
-            'exit': [K_ESCAPE, K_BACKSPACE]}
+            'exit': [K_ESCAPE, K_BACKSPACE]
+        }
 
     def listen(self, event):
         if event.type == KEYDOWN:
@@ -355,34 +373,47 @@ class Menu():
             screen_size[1] - 150,
             size=20, color=FONT_COLOR, align='center')
 
-        draw_text(
-            surf,
-            f'Desenvolvido por Wellington',
-            screen_size[0] * .5,
-            screen_size[1] - 100,
-            size=20, color=FONT_COLOR, align='center')
+        # draw_text(
+        #     surf,
+        #     f'Desenvolvido por Wellington',
+        #     screen_size[0] * .5,
+        #     screen_size[1] - 100,
+        #     size=20, color=FONT_COLOR, align='center')
 
-        draw_text(
-            surf,
-            f'Testado por Samuel',
-            screen_size[0] * .5,
-            screen_size[1] - 50,
-            size=20, color=FONT_COLOR, align='center')
+        # draw_text(
+        #     surf,
+        #     f'Testado por Samuel',
+        #     screen_size[0] * .5,
+        #     screen_size[1] - 50,
+        #     size=20, color=FONT_COLOR, align='center')
 
 
-class Space():
-    def __init__(self, boss=False, callbacks={}):
+class Space(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
         self.bg_image = load_image('space', 'bg-space.png', 1)
         self.bg_size = self.bg_image.get_size()
         self.bg_x = self.bg_size[0] // 2 - screen_size[0]
         self.bg_shift = 0
         self.bg_color = (0, 0, 0)
-        self.platforms = 5
-        self.callbacks = callbacks
-        self.boss = boss
 
-        espaco = int(
-            screen_size[0] - self.platforms * 100) / (self.platforms + 1)
+        self.platforms = 5
+
+        self.boss = kwargs.get('boss')
+
+        self.update_score = kwargs.get('update_score', lambda: 0)
+
+        self.actions_keys = {
+            # action: [trigger keys list], callback
+
+            'attack': ([K_SPACE], lambda: player.shoot()),
+            'left': ([K_a, K_LEFT], lambda: player.move('left')),
+            'right': ([K_d, K_RIGHT], lambda: player.move('right')),
+        }
+
+
+        espaco = int(screen_size[0] - self.platforms * 100) / (self.platforms + 1)
 
         for i in range(self.platforms):
             platform_group.add(Platform(espaco * (i+1) + (i*100)))
@@ -411,27 +442,14 @@ class Space():
             del(enemy_model)
 
     def listen(self, event):
-        keys = {
-            'attack': [K_SPACE],
-            'left': [K_a, K_LEFT],
-            'right': [K_d, K_RIGHT],
-            'exit': [K_ESCAPE]}
-
+    
         if event.type == KEYDOWN:
-            if event.key in keys['attack']:
-                player.shoot()
+            for action in self.actions_keys.keys():
+                if event.type in self.actions_keys[action][0]: self.actions_keys[action][1]()
 
-            if event.key in keys['left']:
-                player.move('left')
-
-            if event.key in keys['right']:
-                player.move('right')
-
-            if event.key in keys['exit']:
-                self.callbacks['pause_space']()
 
         if event.type == KEYUP:
-            if event.key in keys['left'] or event.key in keys['right']:
+            if event.key in self.actions_keys['left'][0] or event.key in self.actions_keys['right'][0]:
                 player.direction = 'none'
 
         if event.type == BOT_SHOOT.type:
@@ -471,6 +489,19 @@ class Space():
         # compute how many moves the backgound
         self.bg_shift = int((player.x - screen_size[0] // 2) * .25)
 
+        if len(enemy_group.sprites()) == 0:
+            self.update_score(10)
+            player.move('none')
+
+        if player.hp <= 0:
+            self.update_score(0)
+            self.navigate('end')
+
+        
+        if len(bullets_player_group.sprites()) > 30:
+            to_remove = bullets_player_group.sprites()[0]
+            bullets_player_group.remove(to_remove)
+
     def draw(self, surf):
         screen.fill(self.bg_color)
         surf.blit(self.bg_image, (self.bg_x + self.bg_shift, 0))
@@ -481,17 +512,24 @@ class Space():
         bullets_player_group.draw(surf)
 
 
-class Scoreboard():
-    def __init__(self, score=0):
-        self.score = score
+class Scoreboard(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.score = kwargs.get('score', 0)
         self.done = False
-        self.wait = 0
+        self.wait = 5
 
     def update(self):
-        if self.wait >= 250:
-            self.done = True
+        
+        self.wait -= 1
+        sleep(2)
 
-        self.wait += 1
+        if self.wait <= 0:
+            boss = True if self.score in [
+                i for i in range(0, 100000, 1000)
+            ] or self.score > 100000 else False
+
+            self.navigate('space', boss=True)
 
     def draw(self, surf):
         surf.blit(pygame.Surface(screen_size), (0, 0))
@@ -511,130 +549,93 @@ class Scoreboard():
             size=20, color=FONT_COLOR)
 
 
+class End(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def update(self):
+        pass
+
+    def draw(self, surf):
+        surf.blit(BG, (0, 0))
+        self.buttons['game_over'].draw(surf)
+        # self.btn_end.update(surf, 'Try Again')
+
+        draw_text(
+            surf,
+            'Game Over',
+            screen_size[0] / 2,
+            screen_size[1] / 8,
+            align='center', size=25, color=FONT_COLOR)
+
+
 class Game():
     def __init__(self):
-        self.on_menu = True
-        self.on_space = False
-        self.on_scoreboard = False
-        self.on_end = False
-        self.score = 0
+
+        self.state = {
+            'score': 0
+        }
 
         self.make_screens()
 
+        self.state['on'] = self.menu
+    
+    def _set_score(self, s):
+        self.state['score'] = s
+
     def update(self):
-        # clean memory
-        self.optimize()
-
-        if self.on_menu:
-            self.menu.update()
-
-        if self.on_space:
-            self.space.update()
-
-            if len(enemy_group.sprites()) == 0:
-                self.score += 100
-                self.on_space = False
-                self.make_screens(score=self.score)
-                self.on_scoreboard = True
-                player.move('none')
-                make_groups()
-
-            if player.hp <= 0:
-                self.on_space = False
-                self.on_menu = True
-                self.score = 0
-                self.make_screens()
-
-        if self.on_scoreboard:
-            self.scoreboard.update()
-
-            if self.scoreboard.done:
-                self.on_scoreboard = False
-                boss = True if self.score in [
-                    i for i in range(0, 100000, 1000)
-                ] or self.score > 100000 else False
-
-                self.make_screens(boss=boss)
-                self.on_space = True
+        self.state['on'].update()
 
     def draw(self, surf):
-        if self.on_menu:
-            self.menu.draw(surf)
-
-        if self.on_scoreboard:
-            self.scoreboard.draw(surf)
-
-        if self.on_space:
-            self.space.draw(surf)
-
-        if self.on_end:
-            surf.blit(BG, (0, 0))
-            self.buttons['game_over'].draw(surf)
-            # self.btn_end.update(surf, 'Try Again')
-
-            draw_text(
-                surf,
-                'Game Over',
-                screen_size[0] / 2,
-                screen_size[1] / 8,
-                align='center', size=25, color=FONT_COLOR)
-
+        self.state['on'].draw(surf)
         pygame.display.flip()
 
     def listen(self):
         for event in pygame.event.get():
-            if event.type == KEYDOWN and event.key == K_F4:
+            if event.type == QUIT: pygame.quit()
 
+            if event.type == KEYDOWN and event.key == K_F4:
                 if screen.get_flags() & FULLSCREEN:
                     pygame.display.set_mode(screen_size)
                 else:
                     pygame.display.set_mode(screen_size, pygame.FULLSCREEN)
 
-            if self.on_menu:
-                self.menu.listen(event)
+            self.state['on'].listen(event)
 
-            if self.on_space:
-                self.space.listen(event)
 
-            if self.on_end:
-                pass
-                # if event.type == KEYDOWN and event.key == K_RETURN:
-                #     pygame.mixer.music.stop()
-                #     self.on_end, self.on_space = False, True
+    def navigate(self, to, **kwargs):
+        self.make_screens(**kwargs)
+        self.state['on'] = to
+        reset_sprite_groups()
 
-                # if event.type == MOUSEBUTTONDOWN:
-                #     mouse_x, mouse_y = pygame.mouse.get_pos()
-                #     if self.btn_end.isClicked(mouse_x, mouse_y):
-                #         pygame.mixer.music.stop()
-                #         self.on_end, self.on_space = False, True
+    def make_screens(self, boss=False):
+        self.menu = Menu(
+            navigate=self.navigate,
+        )
+        self.space = Space(
+            boss,
+            navigate=self.navigate,
+            update_score=self._set_score
+        )
+        self.scoreboard = Scoreboard(
+            score=self.state['score'],
+            navigate=self.navigate,
+        )
 
-    def callback_start_space(self):
-        pygame.mixer.music.stop()
-        self.on_menu, self.on_space = False, True
-
-    def callback_pause_space(self):
-        self.on_menu, self.on_space = True, False
-
-    def make_screens(self, boss=False, score=0):
-        self.menu = Menu(callbacks={
-            'start_space': self.callback_start_space
-        })
-        self.space = Space(boss, callbacks={
-            'pause_space': self.callback_pause_space
-        })
-        self.scoreboard = Scoreboard(score)
-
-    def optimize(self):
-        if len(bullets_player_group.sprites()) > 30:
-            to_remove = bullets_player_group.sprites()[0]
-            bullets_player_group.remove(to_remove)
 
 
 # start
 player = Player()
 
+# make sprites groups
+enemy_group = pygame.sprite.Group()
+platform_group = pygame.sprite.Group()
+bullets_player_group = pygame.sprite.Group()
+bullets_enemy_group = pygame.sprite.Group()
+player_group = pygame.sprite.Group()
+player_group.add(player)
 
-def make_groups():
+def reset_sprite_groups():
     global enemy_group
     global platform_group
     global bullets_player_group
@@ -649,7 +650,7 @@ def make_groups():
     player_group.add(player)
 
 
-make_groups()
+reset_sprite_groups()
 
 game = Game()
 
