@@ -23,6 +23,7 @@ sfx_path = os.path.join(PATH_TO_ASSETS, 'soundtracks', 'sfx', '*.wav')
 sfx = {}
 for file in glob.glob(sfx_path):
     sfx[os.path.basename(file)] = pygame.mixer.Sound(file)
+    sfx[os.path.basename(file)].set_volume(.1)
 
 
 def draw_text(surf, text, x, y, align='topleft', size=20, color=WHITE):
@@ -45,16 +46,14 @@ color_bg = (225, 225, 225)
 
 class Button():
     def __init__(self, posX, posY, text='', callback=None):
+        """position in Xaxis, Yaxis, text, and function"""
         self.tamX = 250
         self.tamY = 45
 
         self.callback = callback
 
-        _centerX = screen_size[0] / 2 - self.tamX / 2
-        _centerY = screen_size[1] / 2 - self.tamY / 2
-
-        self.posX = _centerX if posX == 'center' else posX
-        self.posY = _centerY if posY == 'center' else posY
+        self.posX = screen_size[0] / 2 - self.tamX / 2 if posX == 'center' else posX
+        self.posY = screen_size[1] / 2 - self.tamY / 2 if posY == 'center' else posY
 
         self.text = text
 
@@ -76,10 +75,6 @@ class Button():
             align='center',
             size=25,
             color=color_text)
-
-    def callback(self):
-        if self.callback is not None:
-            self.callback()
 
     def clicked(self):
         mouse_x, mouse_y = pygame.mouse.get_pos()
